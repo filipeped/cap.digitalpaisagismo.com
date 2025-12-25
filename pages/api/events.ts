@@ -1,20 +1,13 @@
-// ✅ DIGITAL PAISAGISMO CAPI V8.7 - CORREÇÕES DE TIPAGEM E COMPLIANCE
-// V8.7: Correções de tipagem e compliance:
-// - Corrigido erro de tipagem: removidos arrays incorretos dos campos user_data
-// - Interface UserData agora recebe strings simples em vez de arrays
-// - Mantida compliance com documentação oficial webhook Hotmart 2.0
-// - checkout_country.iso com prioridade sobre buyer.address.country_iso
-// - Suporte a affiliates.affiliate_code conforme documentação oficial
-// CORREÇÃO CRÍTICA: Event_id agora é consistente entre pixel e API
-// PROBLEMA IDENTIFICADO: Event_ids aleatórios impediam deduplicação correta
-// SOLUÇÃO: Event_ids determinísticos baseados em dados do evento
-// IMPORTANTE: Frontend deve enviar event_id único para cada evento
-// TTL otimizado para 6h para reduzir eventos fantasma
-// Cache aumentado para 50k eventos para melhor cobertura
-// ✅ HOTMART: Corrigido purchaser → buyer, transaction → purchase
-// ✅ HOTMART: Webhook processamento completo com transformação para Meta CAPI
-// 🔥 CRÍTICO V8.4: Campo country agora é hasheado em SHA256 (Meta CAPI exigência)
-// 🔥 CRÍTICO V8.5: Unificação hash geográfico - frontend e Hotmart agora consistentes
+// ✅ DIGITAL PAISAGISMO CAPI V8.8 - SUPORTE A PII PARA N8N WHATSAPP BOT
+// V8.8: Adicionado suporte a PII (email, telefone, nome) para integração com n8n
+// - Interface UserData agora aceita em, ph, fn
+// - Processamento automático com hash SHA256
+// - Compatível com WhatsApp bot para envio de leads qualificados
+// MANTIDO: Todas as funcionalidades da V8.7
+// - Correções de tipagem e compliance
+// - Deduplicação 6h, cache 50k eventos
+// - IPv6 inteligente
+// - Hotmart webhook
 
 import * as crypto from "crypto";
 import * as zlib from "zlib";
@@ -27,8 +20,11 @@ interface UserData {
   ct?: string;  // ✅ CORRETO: Meta CAPI usa 'ct' para city
   st?: string;  // ✅ CORRETO: Meta CAPI usa 'st' para state  
   zp?: string;  // ✅ CORRETO: Meta CAPI usa 'zp' para postal
-  country?: string;  // ✅ ADICIONADO: Campo country usado no código (linhas 663-672)
-  // ❌ REMOVIDO: Campos de dados pessoais (em, ph, fn) para eliminar vazamento de PII
+  country?: string;  // ✅ Campo country
+  // ✅ V8.8: ADICIONADO suporte a PII para n8n WhatsApp bot
+  em?: string;  // email (será hasheado automaticamente)
+  ph?: string;  // phone (será hasheado automaticamente)
+  fn?: string;  // first name (será hasheado automaticamente)
   [key: string]: unknown;
 }
 
@@ -505,7 +501,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
-          "User-Agent": "DigitalPaisagismo-CAPI/8.3-Hotmart",
+          "User-Agent": "DigitalPaisagismo-CAPI/8.8-Hotmart",
         };
 
         if (shouldCompress) {
@@ -514,7 +510,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
         console.log("📤 Enviando evento Hotmart para Meta CAPI:", {
           event_id: transformedEvent.event_id,
-          // ❌ REMOVIDO: buyer_email_hash para eliminar vazamento de PII
           transaction: req.body.data.purchase.transaction,
           value: req.body.data.purchase.price.value,
           currency: req.body.data.purchase.price.currency_value,
@@ -717,6 +712,43 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         }
       }
 
+      // ✅ V8.8: PROCESSAMENTO PII PARA N8N WHATSAPP BOT
+      // Email - normaliza para lowercase antes de hashear
+      if (typeof event.user_data?.em === "string" && event.user_data.em.trim()) {
+        const emailValue = event.user_data.em.trim().toLowerCase();
+        if (emailValue.length === 64 && /^[a-f0-9]{64}$/i.test(emailValue)) {
+          userData.em = emailValue;
+          console.log("📧 Email já hasheado (n8n):", emailValue.substring(0, 16) + '...');
+        } else {
+          userData.em = hashSHA256(emailValue);
+          console.log("📧 Email hasheado (API):", (userData.em as string).substring(0, 16) + '...');
+        }
+      }
+
+      // Telefone - remove caracteres não numéricos antes de hashear
+      if (typeof event.user_data?.ph === "string" && event.user_data.ph.trim()) {
+        const phoneValue = event.user_data.ph.trim().replace(/\D/g, '');
+        if (phoneValue.length === 64 && /^[a-f0-9]{64}$/i.test(phoneValue)) {
+          userData.ph = phoneValue;
+          console.log("📱 Telefone já hasheado (n8n):", phoneValue.substring(0, 16) + '...');
+        } else if (phoneValue.length > 0) {
+          userData.ph = hashSHA256(phoneValue);
+          console.log("📱 Telefone hasheado (API):", (userData.ph as string).substring(0, 16) + '...');
+        }
+      }
+
+      // Nome - normaliza para lowercase antes de hashear
+      if (typeof event.user_data?.fn === "string" && event.user_data.fn.trim()) {
+        const nameValue = event.user_data.fn.trim().toLowerCase();
+        if (nameValue.length === 64 && /^[a-f0-9]{64}$/i.test(nameValue)) {
+          userData.fn = nameValue;
+          console.log("👤 Nome já hasheado (n8n):", nameValue.substring(0, 16) + '...');
+        } else {
+          userData.fn = hashSHA256(nameValue);
+          console.log("👤 Nome hasheado (API):", (userData.fn as string).substring(0, 16) + '...');
+        }
+      }
+
       return {
         event_name: eventName,
         event_id: eventId,
@@ -735,25 +767,31 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Connection: "keep-alive",
-      "User-Agent": "DigitalPaisagismo-CAPI-Proxy/1.0",
+      "User-Agent": "DigitalPaisagismo-CAPI-Proxy/8.8",
       ...(shouldCompress ? { "Content-Encoding": "gzip" } : {}),
     };
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000); // Aumentado para 15s
 
-    console.log("🔄 Enviando evento para Meta CAPI (DEDUPLICAÇÃO CORRIGIDA):", {
+    console.log("🔄 Enviando evento para Meta CAPI (V8.8 - COM PII):", {
       events: enrichedData.length,
       original_events: originalCount,
       duplicates_blocked: duplicatesBlocked,
       deduplication_rate: `${Math.round((duplicatesBlocked / originalCount) * 100)}%`,
       event_names: enrichedData.map((e) => e.event_name),
-      event_ids: enrichedData.map((e) => e.event_id).slice(0, 3), // Primeiros 3 para debug
+      event_ids: enrichedData.map((e) => e.event_id).slice(0, 3),
       ip_type: ip.includes(':') ? 'IPv6' : 'IPv4',
       client_ip_original: ip,
       client_ip_formatted: formattedIP,
       ipv6_conversion_applied: ip.includes(':') ? 'Native IPv6' : 'IPv4→IPv6-mapped',
-      has_pii: false,
+      // ✅ V8.8: Log de PII (apenas indica presença, não mostra dados)
+      has_pii: enrichedData.some((e) => e.user_data.em || e.user_data.ph || e.user_data.fn),
+      pii_fields: {
+        has_email: enrichedData.some((e) => e.user_data.em),
+        has_phone: enrichedData.some((e) => e.user_data.ph),
+        has_name: enrichedData.some((e) => e.user_data.fn),
+      },
       external_ids_count: enrichedData.filter((e) => e.user_data.external_id).length,
       external_ids_from_frontend: enrichedData.filter(
         (e) => e.user_data.external_id && typeof e.user_data.external_id === 'string' && e.user_data.external_id.length === 64
@@ -795,13 +833,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       });
     }
 
-    console.log("✅ Evento enviado com sucesso para Meta CAPI:", {
+    console.log("✅ Evento enviado com sucesso para Meta CAPI (V8.8):", {
       events_processed: enrichedData.length,
       duplicates_blocked: duplicatesBlocked,
       processing_time_ms: responseTime,
       compression_used: shouldCompress,
       ip_type: ip.includes(':') ? 'IPv6' : 'IPv4',
       external_ids_sent: enrichedData.filter((e) => e.user_data.external_id).length,
+      pii_sent: {
+        emails: enrichedData.filter((e) => e.user_data.em).length,
+        phones: enrichedData.filter((e) => e.user_data.ph).length,
+        names: enrichedData.filter((e) => e.user_data.fn).length,
+      },
       sha256_format_count: enrichedData.filter(
         (e) => e.user_data.external_id && typeof e.user_data.external_id === 'string' && e.user_data.external_id.length === 64
       ).length,
@@ -828,4 +871,3 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     res.status(500).json({ error: "Erro interno no servidor CAPI." });
   }
 }
-
