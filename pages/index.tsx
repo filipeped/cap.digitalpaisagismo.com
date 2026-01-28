@@ -33,10 +33,9 @@ export default function Home() {
       }
     };
 
+    // ✅ SEGURANÇA: Tokens removidos - o proxy usa variáveis de ambiente
     const payload = {
-      data: [event],
-      pixel_id: "765087775987515",
-      access_token: "EAAQfmxkTTZCcBPEcIiZAy6OKIxlt0ZBQxYHCcVT3pLFZAOR6zr1PjKMOV844YNtdNFp2PRgwkBvhFIYLv5ZBVnltHDRnlZAAZCH8gIZCK0HHs6dR4QpWOUKxKvoaUXvUobAsJZB4c0eraiIzoJFkPeanQ6v7PPzzDqIZB6dniUDyQK6PhwrVPGLmzgPoaDzz9bYwZDZD"
+      data: [event]
     };
 
     try {

@@ -141,9 +141,15 @@ interface ApiResponse {
   setHeader(name: string, value: string): void;
 }
 
-const PIXEL_ID = "765087775987515";
-const ACCESS_TOKEN = "EAAQfmxkTTZCcBPHGbA2ojC29bVbNPa6GM3nxMxsZC29ijBmuyexVifaGnrjFZBZBS6LEkaR29X3tc5TWn4SHHffeXiPvexZAYKP5mTMoYGx5AoVYaluaqBTtiKIjWALxuMZAPVcBk1PuYCb0nJfhpzAezh018LU3cT45vuEflMicoQEHHk3H5YKNVAPaUZC6yzhcQZDZD";
+// ✅ SEGURANÇA: Tokens via variáveis de ambiente (configurar na Vercel)
+const PIXEL_ID = process.env.META_PIXEL_ID || "";
+const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN || "";
 const META_URL = `https://graph.facebook.com/v19.0/${PIXEL_ID}/events`;
+
+// ⚠️ Validação de configuração
+if (!PIXEL_ID || !ACCESS_TOKEN) {
+  console.error("❌ ERRO CRÍTICO: META_PIXEL_ID e META_ACCESS_TOKEN devem estar configurados nas variáveis de ambiente!");
+}
 
 // ✅ SISTEMA DE DEDUPLICAÇÃO MELHORADO
 const eventCache = new Map<string, number>();
@@ -453,9 +459,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     "https://cap.consultoria.digitalpaisagismo.com",
     "https://projeto.digitalpaisagismo.com",
     "https://www.projeto.digitalpaisagismo.com",
-    "http://localhost:3000",
-    "http://localhost:8080",
-    "http://localhost:8081",
+    // ✅ SEGURANÇA: localhost removido em produção
+    // Para dev local, adicione temporariamente ou use variável de ambiente
   ];
 
   res.setHeader(
