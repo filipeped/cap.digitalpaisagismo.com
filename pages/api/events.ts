@@ -514,7 +514,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         delete customData.currency;
       }
       if (eventName === "Lead") {
-        customData.value = typeof customData.value !== "undefined" ? customData.value : 5000;
+        // ✅ CORREÇÃO META: Usar valor FIXO consistente com frontend (1 BRL)
+        customData.value = typeof customData.value !== "undefined" ? customData.value : 1;
         customData.currency = customData.currency || "BRL";
       }
 
