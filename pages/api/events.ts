@@ -62,7 +62,7 @@ interface ApiResponse {
 // ✅ SEGURANÇA: Tokens via variáveis de ambiente (configurar na Vercel)
 const PIXEL_ID = process.env.META_PIXEL_ID || "";
 const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN || "";
-const META_URL = `https://graph.facebook.com/v19.0/${PIXEL_ID}/events`;
+const META_URL = `https://graph.facebook.com/v21.0/${PIXEL_ID}/events`;
 
 // ⚠️ Validação de configuração
 if (!PIXEL_ID || !ACCESS_TOKEN) {
